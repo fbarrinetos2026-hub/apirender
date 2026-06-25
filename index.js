@@ -5,6 +5,13 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    return res.status(400).json({ error: "JSON inválido" })
+  }
+  next(err)
+})
+
 const recetas = [
   {
     id: 1,
@@ -26,6 +33,13 @@ const recetas = [
   },
 ]
 
+app.get("/", (req, res) => {
+  res.json({
+    mensaje: "API de recetas activa",
+    rutas: ["/recetas", "/recetas/:id"],
+  })
+})
+
 app.get("/recetas", (req, res) => {
   res.json(recetas)
 })
@@ -42,16 +56,24 @@ app.get("/recetas/:id", (req, res) => {
 })
 
 app.post("/recetas", (req, res) => {
-  const { nombre, ingredientes, tiempoMinutos } = req.body
+  const { nombre, ingredientes, tiempoMinutos } = req.body || {}
 
-  if (!nombre || !Array.isArray(ingredientes) || typeof tiempoMinutos !== "number") {
+  if (
+    typeof nombre !== "string" ||
+    nombre.trim() === "" ||
+    !Array.isArray(ingredientes) ||
+    ingredientes.some((item) => typeof item !== "string" || item.trim() === "") ||
+    typeof tiempoMinutos !== "number" ||
+    Number.isNaN(tiempoMinutos) ||
+    tiempoMinutos <= 0
+  ) {
     return res.status(400).json({ error: "Datos de receta inválidos" })
   }
 
   const nuevaReceta = {
     id: recetas.length + 1,
-    nombre,
-    ingredientes,
+    nombre: nombre.trim(),
+    ingredientes: ingredientes.map((item) => item.trim()),
     tiempoMinutos,
   }
 
@@ -62,6 +84,10 @@ app.post("/recetas", (req, res) => {
     totalRecetas: recetas.length,
     receta: nuevaReceta,
   })
+})
+
+app.use((req, res) => {
+  res.status(404).json({ error: "Ruta no encontrada" })
 })
 
 const PORT = process.env.PORT || 3000
